@@ -45,15 +45,11 @@ jobs:
           echo "apk_name=$APK_NAME" >> $GITHUB_OUTPUT
           echo "commit_msg=$COMMIT_MSG" >> $GITHUB_OUTPUT
 
-      - name: Replace CLOUDFRONT_JSON_URL placeholder
-        run: |
-          JSON_URL="\"https://${{ secrets.CLOUDFRONT_DOMAIN }}/${{ steps.meta.outputs.repo }}/${{ steps.meta.outputs.branch }}/latest.json\""
-          sed -i '' "s|CLOUDFRONT_JSON_URL_PLACEHOLDER|$JSON_URL|g" app/build.gradle.kts
 
 
       # 5. Debug APK 빌드
       - name: Build APK (Debug)
-        run: ./gradlew assembleDebug
+        run: ./gradlew assembleDebug -PcloudfrontJsonUrl="https://${{ secrets.CLOUDFRONT_DOMAIN }}/${{ steps.meta.outputs.repo }}/${{ steps.meta.outputs.branch }}/latest.json"
 
       # 6. GitHub Actions UI에서도 다운로드 가능하도록 업로드
       - name: Upload APK artifact

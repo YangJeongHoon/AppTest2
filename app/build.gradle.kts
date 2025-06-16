@@ -17,13 +17,12 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    val cloudfrontJsonUrl: String = project.findProperty("cloudfrontJsonUrl") as? String
+        ?: "https://apk.yangsfarm.com/Apptest2/main/latest.json" // 로컬 기본값
+
     buildTypes {
         debug {
-            buildConfigField(
-                "String",
-                "CLOUDFRONT_JSON_URL",
-                "CLOUDFRONT_JSON_URL_PLACEHOLDER"
-            )
+            buildConfigField("String", "CLOUDFRONT_JSON_URL", "\"$cloudfrontJsonUrl\"")
         }
         release {
             isMinifyEnabled = false
@@ -31,11 +30,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            buildConfigField(
-                "String",
-                "CLOUDFRONT_JSON_URL",
-                "CLOUDFRONT_JSON_URL_PLACEHOLDER"
-            )
+            buildConfigField("String", "CLOUDFRONT_JSON_URL", "\"$cloudfrontJsonUrl\"")
         }
     }
     compileOptions {

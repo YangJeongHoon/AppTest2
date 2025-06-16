@@ -7,10 +7,7 @@ import android.util.Log
 import android.widget.Button
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -18,7 +15,7 @@ import com.example.apptest2.BuildConfig
 
 class MainActivity : AppCompatActivity() {
 
-    private val updateJsonUrl = BuildConfig.CLOUDFRONT_JSON_URL // 환경변수로 주입
+    private val updateJsonUrl = BuildConfig.CLOUDFRONT_JSON_URL
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -33,6 +30,9 @@ class MainActivity : AppCompatActivity() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val conn = URL(updateJsonUrl).openConnection() as HttpURLConnection
+                conn.connectTimeout = 5000
+                conn.readTimeout = 5000
+
                 val jsonStr = conn.inputStream.bufferedReader().use { it.readText() }
                 val json = JSONObject(jsonStr)
 
@@ -87,5 +87,3 @@ class MainActivity : AppCompatActivity() {
         return false
     }
 }
-
-
