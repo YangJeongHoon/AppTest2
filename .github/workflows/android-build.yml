@@ -15,98 +15,101 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v3
 
-      # 2. JDK 17 설치 (Gradle 호환용)
+      # 2. JDK 17 설치
       - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # 3. gradlew에 실행 권한 부여
+      # 3. gradlew 실행 권한 부여
       - name: Grant Gradle permission
         run: chmod +x ./gradlew
 
-      # 4. Debug APK 빌드
+      # 4. 빌드 메타데이터 생성
+      - name: Export build metadata
+        id: meta
+        run: |
+          REPO_NAME=${{ github.event.repository.name }}
+          BRANCH_NAME=${{ github.ref_name }}
+          DATE_TIME=$(date +%Y%m%d_%H%M%S)
+          COMMIT_COUNT=$(git rev-list --count HEAD)
+          VERSION="$(date +%m).$(date +%d).$COMMIT_COUNT"
+          APK_NAME="${REPO_NAME}_${VERSION}.apk"
+          COMMIT_MSG=$(git log -1 --pretty=%s)
+
+          echo "repo=$REPO_NAME" >> $GITHUB_OUTPUT
+          echo "branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
+          echo "datetime=$DATE_TIME" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "apk_name=$APK_NAME" >> $GITHUB_OUTPUT
+          echo "commit_msg=$COMMIT_MSG" >> $GITHUB_OUTPUT
+
+      # 5. Debug APK 빌드
       - name: Build APK (Debug)
         run: ./gradlew assembleDebug
 
-      # 5. GitHub Actions UI에서도 다운로드 가능하도록 업로드
+      # 6. GitHub Actions UI에서도 다운로드 가능하도록 업로드
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug.apk
+          name: ${{ steps.meta.outputs.apk_name }}
           path: app/build/outputs/apk/debug/app-debug.apk
 
-      # 6. 빌드된 APK를 S3에 업로드
+      # 7. APK를 S3에 업로드
       - name: Upload APK to S3
         run: |
-          REPO_NAME=${{ github.event.repository.name }}
-          BRANCH_NAME=${{ github.ref_name }}
-          DATE_TIME=$(date +%Y%m%d_%H%M%S)
-
-          S3_KEY="${REPO_NAME}/${BRANCH_NAME}/${DATE_TIME}/${REPO_NAME}.apk"
-          S3_URI="s3://${{ secrets.AWS_S3_BUCKET_NAME }}/$S3_KEY"
-
-          echo "Uploading to $S3_URI"
-          aws s3 cp app/build/outputs/apk/debug/app-debug.apk "$S3_URI"
+          S3_KEY="${{ steps.meta.outputs.repo }}/${{ steps.meta.outputs.branch }}/${{ steps.meta.outputs.datetime }}/${{ steps.meta.outputs.apk_name }}"
+          aws s3 cp app/build/outputs/apk/debug/app-debug.apk "s3://${{ secrets.AWS_S3_BUCKET_NAME }}/$S3_KEY"
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: ap-northeast-2
 
-      # 7. CloudFront 배포 ID 탐색
-      - name: Find CloudFront distribution ID
-        id: get_distribution_id
-        run: |
-          distributions=$(aws cloudfront list-distributions \
-            --query "DistributionList.Items[*].{Id:Id,Origins:Origins.Items[*].DomainName}" \
-            --output json)
-
-          echo "Distributions found: $distributions"
-
-          distribution_id=$(echo "$distributions" | jq -r \
-            ".[] | select(.Origins[] == \"${{ secrets.AWS_S3_BUCKET_NAME }}.s3.ap-northeast-2.amazonaws.com\").Id" | head -n 1)
-
-          echo "Found distribution ID: $distribution_id"
-
-          if [ -z "$distribution_id" ]; then
-            echo "Error: No matching CloudFront distribution found." >&2
-            exit 1
-          fi
-
-          echo "distribution_id=$distribution_id" >> $GITHUB_ENV
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: ap-northeast-2
-
-      # 8. 캐시 무효화 (전체 파일 대상)
-      - name: Invalidate CloudFront cache
-        run: |
-          echo "Invalidating CloudFront cache for distribution ID: ${{ env.distribution_id }}"
-          aws cloudfront create-invalidation \
-            --distribution-id ${{ env.distribution_id }} \
-            --paths "/*"
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: ap-northeast-2
-
-      # 9. 최신 버전 정보 파일 latest.json 생성 및 S3 업로드
+      # 8. 최신 버전 정보 파일 latest.json 생성 및 업로드
       - name: Upload latest.json to S3
         run: |
-          REPO_NAME=${{ github.event.repository.name }}
-          BRANCH_NAME=${{ github.ref_name }}
-          DATE_TIME=$(date +%Y%m%d_%H%M%S)
-          FILE_NAME="${REPO_NAME}.apk"
-
           CLOUDFRONT_DOMAIN=${{ secrets.CLOUDFRONT_DOMAIN }}
-          APK_URL="https://${CLOUDFRONT_DOMAIN}/${REPO_NAME}/${BRANCH_NAME}/${DATE_TIME}/${FILE_NAME}"
+          APK_URL="https://${CLOUDFRONT_DOMAIN}/${{ steps.meta.outputs.repo }}/${{ steps.meta.outputs.branch }}/${{ steps.meta.outputs.datetime }}/${{ steps.meta.outputs.apk_name }}"
 
           echo "Creating latest.json with APK URL: $APK_URL"
-          echo "{\"branch\":\"$BRANCH_NAME\",\"version\":\"$DATE_TIME\",\"apkUrl\":\"$APK_URL\"}" > latest.json
 
-          aws s3 cp latest.json "s3://${{ secrets.AWS_S3_BUCKET_NAME }}/${REPO_NAME}/${BRANCH_NAME}/latest.json"
+          cat <<EOF > latest.json
+          {
+            "branch": "${{ steps.meta.outputs.branch }}",
+            "version": "${{ steps.meta.outputs.version }}",
+            "apkUrl": "$APK_URL",
+            "description": "${{ steps.meta.outputs.commit_msg }}"
+          }
+          EOF
+  
+          aws s3 cp latest.json "s3://${{ secrets.AWS_S3_BUCKET_NAME }}/${{ steps.meta.outputs.repo }}/${{ steps.meta.outputs.branch }}/latest.json" \
+          --content-type application/json
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ap-northeast-2
+
+# 9. CloudFront 배포 ID 탐색 및 캐시 무효화 (가장 마지막)
+      - name: Invalidate CloudFront cache
+        run: |
+          distributions=$(aws cloudfront list-distributions \
+          --query "DistributionList.Items[*].{Id:Id,Origins:Origins.Items[*].DomainName}" \
+          --output json)
+    
+          echo "Distributions found: $distributions"
+          distribution_id=$(echo "$distributions" | jq -r \
+          ".[] | select(.Origins[] == \"${{ secrets.AWS_S3_BUCKET_NAME }}.s3.ap-northeast-2.amazonaws.com\").Id" | head -n 1)
+    
+          if [ -z "$distribution_id" ]; then
+          echo "Error: No matching CloudFront distribution found." >&2
+          exit 1
+          fi
+    
+          echo "Invalidating CloudFront cache for distribution ID: $distribution_id"
+          aws cloudfront create-invalidation \
+          --distribution-id $distribution_id \
+          --paths "/*"
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
