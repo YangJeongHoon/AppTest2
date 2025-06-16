@@ -22,7 +22,7 @@ android {
             buildConfigField(
                 "String",
                 "CLOUDFRONT_JSON_URL",
-                "\"CLOUDFRONT_JSON_URL_PLACEHOLDER\""
+                "CLOUDFRONT_JSON_URL_PLACEHOLDER"
             )
         }
         release {
@@ -34,7 +34,7 @@ android {
             buildConfigField(
                 "String",
                 "CLOUDFRONT_JSON_URL",
-                "\"CLOUDFRONT_JSON_URL_PLACEHOLDER\""
+                "CLOUDFRONT_JSON_URL_PLACEHOLDER"
             )
         }
     }
