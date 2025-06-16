@@ -18,11 +18,23 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField(
+                "String",
+                "CLOUDFRONT_JSON_URL",
+                "\"CLOUDFRONT_JSON_URL_PLACEHOLDER\""
+            )
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
+            )
+            buildConfigField(
+                "String",
+                "CLOUDFRONT_JSON_URL",
+                "\"CLOUDFRONT_JSON_URL_PLACEHOLDER\""
             )
         }
     }
@@ -34,13 +46,14 @@ android {
         jvmTarget = "11"
     }
     buildFeatures {
+        buildConfig = true  // ✅ 여기 추가!
         viewBinding = true
     }
 }
 
 dependencies {
 
-    implementation("com.github.javiersantos:AppUpdater:2.7")
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
