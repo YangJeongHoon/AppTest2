@@ -104,9 +104,9 @@ jobs:
           APK_URL="https://${CLOUDFRONT_DOMAIN}/${REPO_NAME}/${BRANCH_NAME}/${DATE_TIME}/${FILE_NAME}"
 
           echo "Creating latest.json with APK URL: $APK_URL"
-          echo "{\"version\":\"$DATE_TIME\",\"apkUrl\":\"$APK_URL\"}" > latest.json
+          echo "{\"branch\":\"$BRANCH_NAME\",\"version\":\"$DATE_TIME\",\"apkUrl\":\"$APK_URL\"}" > latest.json
 
-          aws s3 cp latest.json "s3://${{ secrets.AWS_S3_BUCKET_NAME }}/${REPO_NAME}/latest.json"
+          aws s3 cp latest.json "s3://${{ secrets.AWS_S3_BUCKET_NAME }}/${REPO_NAME}/${BRANCH_NAME}/latest.json"
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
