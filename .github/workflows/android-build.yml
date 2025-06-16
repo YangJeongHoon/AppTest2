@@ -31,3 +31,49 @@ jobs:
         with:
           name: app-debug.apk
           path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload APK to S3
+        run: |
+          REPO_NAME=${{ github.event.repository.name }}
+          BRANCH_NAME=${{ github.ref_name }}
+          DATE_TIME=$(date +%Y%m%d_%H%M%S)
+      
+          S3_KEY="${REPO_NAME}/${BRANCH_NAME}/${DATE_TIME}/${REPO_NAME}.apk"
+          S3_URI="s3://${{ secrets.AWS_S3_BUCKET_NAME }}/$S3_KEY"
+      
+          echo "Uploading to $S3_URI"
+          aws s3 cp app/build/outputs/apk/debug/app-debug.apk "$S3_URI" --acl public-read
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ap-northeast-2
+
+      - name: Find CloudFront distribution ID
+        id: get_distribution_id
+        run: |
+          distributions=$(aws cloudfront list-distributions \
+            --query "DistributionList.Items[*].{Id:Id,Origins:Origins.Items[*].DomainName}" \
+            --output json)
+
+          echo "Distributions found: $distributions"
+
+          # 버킷 이름과 정확히 일치하는 CloudFront 배포 ID 찾기
+          distribution_id=$(echo "$distributions" | jq -r \
+            ".[] | select(.Origins[] == \"${{ secrets.AWS_S3_BUCKET_NAME }}.s3.ap-northeast-2.amazonaws.com\").Id" | head -n 1)
+
+          echo "Found distribution ID: $distribution_id"
+
+          if [ -z "$distribution_id" ]; then
+            echo "Error: No matching CloudFront distribution found." >&2
+            exit 1
+          fi
+
+          echo "distribution_id=$distribution_id" >> $GITHUB_ENV
+
+      - name: Invalidate CloudFront cache
+        run: |
+          echo "Invalidating CloudFront cache for distribution ID: ${{ env.distribution_id }}"
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ env.distribution_id }} \
+            --paths "/*"
+
