@@ -18,7 +18,7 @@ android {
     }
 
     val cloudfrontJsonUrl: String = project.findProperty("cloudfrontJsonUrl") as? String
-        ?: "https://apk.yangsfarm.com/Apptest2/main/latest.json" // 로컬 기본값
+        ?: "https://apk.yangsfarm.com/AppTest2/main/latest.json" // 로컬 기본값
 
     buildTypes {
         debug {
